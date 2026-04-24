@@ -12,6 +12,31 @@ router = APIRouter(prefix="/audits", tags=["audits"])
 INLINE_SAFE_TOOLS = {"internal"}
 
 
+def _diagnostics_excerpt(summary: dict | None, run_error: str | None) -> str | None:
+    if not summary:
+        return run_error
+
+    diagnostics = summary.get("diagnostics") or {}
+    resolved_command = summary.get("resolved_command") or diagnostics.get("resolved_command")
+    path_candidates = diagnostics.get("path_binary_candidates") or []
+    scripts = diagnostics.get("scripts_matching_prowler") or []
+    modules = diagnostics.get("module_candidates") or []
+
+    parts = []
+    if run_error:
+        parts.append(run_error)
+    if resolved_command:
+        parts.append(f"resolved_command={resolved_command}")
+    if path_candidates:
+        parts.append(f"path_candidates={path_candidates[:2]}")
+    if scripts:
+        parts.append(f"scripts={scripts[:3]}")
+    if modules:
+        parts.append(f"modules={modules[:4]}")
+
+    return " | ".join(parts) if parts else None
+
+
 class AuditCreate(BaseModel):
     name: str
     provider: str
@@ -36,6 +61,9 @@ async def list_audits(db: AsyncSession = Depends(get_db)) -> list[dict]:
             "coverage_percent": a.coverage_percent,
             "collection_summary": a.collection_summary,
             "run_error": a.run_error,
+            "diagnostics_excerpt": _diagnostics_excerpt(a.collection_summary, a.run_error)
+            if a.status == AuditStatus.failed
+            else None,
             "created_at": a.created_at.isoformat(),
         }
         for a in audits
@@ -99,5 +127,6 @@ async def trigger_audit(audit_id: int, db: AsyncSession = Depends(get_db)) -> di
             "score": result.score,
             "coverage_percent": result.coverage_percent,
             "run_error": result.run_error,
+            "diagnostics_excerpt": _diagnostics_excerpt(result.summary, result.run_error),
             "execution_mode": "inline",
         }

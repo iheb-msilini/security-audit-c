@@ -1,5 +1,7 @@
 from fastapi import APIRouter
 
+from app.integrations.prowler_adapter import ProwlerAuditAdapter
+
 router = APIRouter(prefix="/connectors", tags=["connectors"])
 
 
@@ -11,3 +13,9 @@ async def connector_status() -> list[dict]:
         {"tool": "maester", "providers": ["m365"], "status": "adapter-ready"},
         {"tool": "steampipe", "providers": ["aws", "azure", "gcp", "multi"], "status": "adapter-ready"},
     ]
+
+
+@router.get("/diagnostics/prowler")
+async def prowler_diagnostics() -> dict:
+    adapter = ProwlerAuditAdapter()
+    return await adapter.diagnose_runtime()
